@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Last of Us RL</title>
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        overflow: hidden; /* Evita que a imagem de fundo ultrapasse a tela */
+        position: relative; /* Necessário para o posicionamento absoluto do elemento de imagem */
+    }
+    #background-image {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* Ajusta a imagem para cobrir todo o elemento */
+        z-index: -1; /* Coloca a imagem atrás de todos os outros elementos */
+    }
+    #grid-container {
+        display: grid;
+        grid-template-columns: repeat(6, 60px); /* 6 colunas com largura igual */
+        grid-template-rows: repeat(6, 60px); /* 6 linhas com altura igual */
+        gap: 1px; /* espaço entre as células */
+        border: 1px solid #000;
+    }
+    .cell {
+        background-color: #fff;
+        border: 1px solid #000;
+    }
+    .casa {
+        background-color: rgb(251, 255, 0);
+        background-image: url('segurança.jpg'); /* Define a imagem de fundo */
+        background-size: cover; /* Ajusta o tamanho da imagem para cobrir toda a célula */
+    }
+    .agent {
+        background-color: blue;
+        background-image: url('agente.jpg'); /* Define a imagem de fundo */
+        background-size: cover; /* Ajusta o tamanho da imagem para cobrir toda a célula */
+    }
+    .zombie {
+        background-color: red;
+        background-image: url('zombis.jpg'); /* Define a imagem de fundo */
+        background-size: cover; /* Ajusta o tamanho da imagem para cobrir toda a célula */
+    }
+    .supply {
+        background-color: green;
+        background-image: url('suprimentos.jpg'); /* Define a imagem de fundo */
+        background-size: cover; /* Ajusta o tamanho da imagem para cobrir toda a célula */
+    }
+    .rock{
+        background-color: rgb(143, 167, 143);
+        background-image: url('pedra.jpg'); /* Define a imagem de fundo */
+        background-size: cover; /* Ajusta o tamanho da imagem para cobrir toda a célula */
+    }
+    .wall {
+        background-color: gray;
+        background-image: url('wall.jpg'); /* Define a imagem de fundo */
+        background-size: cover; /* Ajusta o tamanho da imagem para cobrir toda a célula */
+    }
+    .empty {
+        background-color: #fff;
+    }
+    #divModoGame {
+        background-color: #ccc;
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        display: flex;
+        align-items: center;
+        border: #000 solid 1px;
+        border-radius: 5px;
+        padding: 0px 5px 0px 5px;
+    }
+    #modo-jogo {
+        padding-right: 5px;
+    }
+    #toggle-button {
+        padding: 4px 8px;
+        background-color: #36e61f;
+        border: none;
+        cursor: pointer;
+        border: #000 solid 1px;
+        border-radius: 2px;
+    }
+    /* Estilos do modal */
+    .modal {
+        display: none; /* Oculta o modal por padrão */
+        position: fixed;
+        z-index: 1;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5); /* Fundo semi-transparente */
+    }
+    .modal-content {
+        background-color: #fefefe;
+        margin: 15% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%;
+    }
+    .close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+    }
+    .close:hover,
+    .close:focus {
+        color: black;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    #score-container{
+        background-color: #ccc;
+        position: absolute;
+        top: 7%;
+        height: 8%;
+        width: 20%;
+        text-align: center;
+        padding-top: 20px;
+        align-items: center;
+        border: solid #000 2px;
+        border-radius: 5px;
+        font-size: 25px;
+        font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+    }
+    #score {
+        
+    }
+</style>
+</head>
+<body>
+    <img id="background-image" alt="Imagem de fundo"> <!-- Altere 'sua_imagem_de_fundo.jpg' para o nome da sua imagem -->
+    <div id="grid-container"></div>
+    <div id="score-container">Score: <span id="score">0</span></div> <!-- Elemento para exibir o placar -->
+    <div id="modal" class="modal"> <!-- Modal -->
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <p id="modal-text"></p>
+        </div>
+    </div>
+    <div id="divModoGame">
+        <p id="modo-jogo">Modo: </p>
+        <button id="toggle-button">Jogador</button>
+    </div>
+
+<script>
+    let score = 0;
+    const scoreElement = document.getElementById('score');
+    const modal = document.getElementById('modal');
+    const modalText = document.getElementById('modal-text');
+    let allowMovement = false; // variável global para controlar o estado do movimento
+    let allowPlayerMovement = true; // variável global para controlar o movimento do jogador
+    let supplies = [];
+    let shortestPathToSupply = [];
+
+    // Função para atualizar o placar
+    function updateScore(points) {
+        score += points;
+        scoreElement.textContent = score;
+    }
+
+    // Função para mostrar o modal com o texto fornecido
+    function showModal(text) {
+        modalText.textContent = text;
+        modal.style.display = 'block';
+    }
+
+    // Listener para fechar o modal clicando no botão "x"
+    document.getElementsByClassName('close')[0].onclick = function() {
+        modal.style.display = 'none';
+    }
+
+    document.getElementById('toggle-button').addEventListener('click', function() {
+        allowMovement = !allowMovement; // inverte o estado do movimento ao clicar no botão
+        allowPlayerMovement = allowMovement ? false : true; // permite o movimento do jogador apenas quando não está no modo "Jogado por IA"
+        const button = document.getElementById('toggle-button');
+        if (allowMovement) {
+            button.textContent = 'jogado por IA'; // altera o texto do botão para "IA"
+            button.style.backgroundColor = 'blue'; // altera a cor de fundo para azul
+            runAI(); // inicia o movimento do agente por IA
+        } else {
+            button.textContent = 'Jogador'; // altera o texto do botão de volta para "Jogador"
+            button.style.backgroundColor = '#36e61f'; // altera a cor de fundo de volta para verde
+        }
+    });
+
+    const randomBackgroundNumber = Math.floor(Math.random() * 7) + 1; // Generates a random number from 1 to 7
+    const backgroundImageSrc = `images${randomBackgroundNumber}.jpg`; // Construct the image filename
+    document.getElementById('background-image').src = backgroundImageSrc; // Set the background image
+
+    const grid = [];
+    const gridSize = 6;
+
+    // Create the grid
+    for (let i = 0; i < gridSize; i++) {
+        grid[i] = [];
+        for (let j = 0; j < gridSize; j++) {
+            grid[i][j] = 'empty'; // initially, all cells are empty
+            const cell = document.createElement('div');
+            cell.classList.add('cell', 'empty');
+            cell.dataset.row = i;
+            cell.dataset.col = j;
+            document.getElementById('grid-container').appendChild(cell);
+        }
+    }
+
+    // Randomly place agent, zombie, and supply
+    function placeRandomly(element) {
+        let row, col;
+        do {
+            row = Math.floor(Math.random() * gridSize);
+            col = Math.floor(Math.random() * gridSize);
+        } while (grid[row][col] !== 'empty');
+        grid[row][col] = element;
+        const cell = document.querySelector('.cell[data-row="' + row + '"][data-col="' + col + '"]');
+        cell.classList.remove('empty');
+        cell.classList.add(element);
+    }
+
+    placeRandomly('agent');
+
+    placeRandomly('zombie');
+    placeRandomly('zombie');
+    placeRandomly('zombie');
+
+    placeRandomly('supply');
+    placeRandomly('supply');
+    placeRandomly('supply');
+
+    placeRandomly('rock');
+    placeRandomly('rock');
+    placeRandomly('rock');
+
+    placeRandomly('wall');
+    placeRandomly('wall');
+    placeRandomly('wall');
+    placeRandomly('wall');
+
+    placeRandomly('casa');
+
+    // Define actions
+    document.addEventListener('keydown', function(event) {
+    if (!allowPlayerMovement) return;
+    const key = event.key;
+    const agentCell = document.querySelector('.cell.agent');
+    let newRow = parseInt(agentCell.dataset.row);
+    let newCol = parseInt(agentCell.dataset.col);
+
+    if (key === 'ArrowUp' && newRow > 0) {
+        newRow--;
+    } else if (key === 'ArrowDown' && newRow < gridSize - 1) {
+        newRow++;
+    } else if (key === 'ArrowLeft' && newCol > 0) {
+        newCol--;
+    } else if (key === 'ArrowRight' && newCol < gridSize - 1) {
+        newCol++;
+    }
+
+    const newCell = document.querySelector('.cell[data-row="' + newRow + '"][data-col="' + newCol + '"]');
+    if (!newCell.classList.contains('wall') && !newCell.classList.contains('rock')) {
+        agentCell.classList.remove('agent');
+        agentCell.classList.add('empty');
+        newCell.classList.remove('empty');
+        newCell.classList.add('agent');
+
+        if (newCell.classList.contains('supply')) {
+            console.log('Supply collected!');
+            updateScore(10); // Adiciona 10 pontos ao placar
+            newCell.classList.remove('supply');
+            placeRandomly('supply');
+        } else if (newCell.classList.contains('zombie')) {
+            console.log('Encountered a zombie!');
+            updateScore(-10); // Remove 10 pontos do placar
+            newCell.classList.remove('zombie');
+            placeRandomly('zombie');
+        } else if (newCell.classList.contains('casa')) {
+            showModal('Fim de jogo! Sua pontuação foi: ' + score); // Mostra o modal com a pontuação
+        }
+    }
+});
+
+    function findShortestPathToSupply(startRow, startCol) {
+
+    // Reinicia o registro do caminho mais curto
+    shortestPathToSupply = [];
+
+    // Define a matriz de visitados para rastrear as células visitadas
+    let visited = [];
+    for (let i = 0; i < gridSize; i++) {
+        visited[i] = [];
+        for (let j = 0; j < gridSize; j++) {
+            visited[i][j] = false;
+        }
+    }
+
+    // Define a fila para o BFS
+    let queue = [];
+    queue.push({ row: startRow, col: startCol, path: [] });
+    visited[startRow][startCol] = true;
+
+    // Executa o BFS
+    while (queue.length > 0) {
+        let { row, col, path } = queue.shift();
+        console.log(path);
+        // Verifica se a célula atual contém um suprimento
+        if (grid[row][col] === 'supply') {
+            shortestPathToSupply = path;
+            return;
+        }
+
+        // Adiciona as células vizinhas à fila
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]]; // cima, baixo, esquerda, direita
+        for (let [dx, dy] of directions) {
+            let newRow = row + dx;
+            let newCol = col + dy;
+
+            // Verifica se a célula vizinha está dentro dos limites e não foi visitada
+            if (newRow >= 0 && newRow < gridSize && newCol >= 0 && newCol < gridSize && !visited[newRow][newCol] && grid[newRow][newCol] !== 'wall' && grid[newRow][newCol] !== 'rock' && grid[newRow][newCol] !== 'zombie') { //remover encontro com zombie => "&& grid[newRow][newCol] !== 'zombie'"
+                visited[newRow][newCol] = true;
+                queue.push({ row: newRow, col: newCol, path: [...path, { row: newRow, col: newCol }] });
+            }
+        }
+    }
+}
+
+
+    // Função principal para executar o agente por IA
+    async function runAI() {
+    while (allowMovement) {
+        // Atualiza o mapa de suprimentos
+        supplies = [];
+        for (let i = 0; i < gridSize; i++) {
+            for (let j = 0; j < gridSize; j++) {
+                if (grid[i][j] === 'supply') {
+                    supplies.push({ row: i, col: j });
+                }
+            }
+        }
+
+        // Se houver suprimentos no mapa, encontra o caminho mais curto até o suprimento mais próximo e move o agente
+        if (supplies.length > 0) {
+            const agentCell = document.querySelector('.cell.agent');
+            let agentRow = parseInt(agentCell.dataset.row);
+            let agentCol = parseInt(agentCell.dataset.col);
+
+            // Verifica se a variável shortestPathToSupply precisa ser reiniciada
+            if (shortestPathToSupply.length === 0) {
+                // Encontra o suprimento mais próximo
+                let minDistance = Infinity;
+                let nearestSupply = null;
+                for (let supply of supplies) {
+                    let distance = Math.abs(supply.row - agentRow) + Math.abs(supply.col - agentCol);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestSupply = supply;
+                    }
+                }
+
+                // Encontra o caminho mais curto até o suprimento mais próximo
+                findShortestPathToSupply(agentRow, agentCol);
+            }
+
+            // Move o agente para a próxima célula no caminho mais curto
+            if (shortestPathToSupply.length > 0) {
+                const nextCell = shortestPathToSupply.shift();
+                agentCell.classList.remove('agent');
+                agentCell.classList.add('empty');
+                const newAgentCell = document.querySelector('.cell[data-row="' + nextCell.row + '"][data-col="' + nextCell.col + '"]');
+                newAgentCell.classList.remove('empty');
+                newAgentCell.classList.add('agent');
+
+                // Atualiza a posição do agente
+                agentRow = nextCell.row;
+                agentCol = nextCell.col;
+
+                // Verifica se o agente coletou o suprimento
+                if (grid[agentRow][agentCol] === 'supply') {
+                    console.log('Supply collected!');
+                    updateScore(10); // Adiciona 10 pontos ao placar
+                    newAgentCell.classList.remove('supply');
+                    // Remove o suprimento do mapa
+                    supplies = supplies.filter(supply => !(supply.row === agentRow && supply.col === agentCol));
+                    // Reinicia shortestPathToSupply
+                    shortestPathToSupply = [];
+                    // Atualiza a posição do agente no mapa
+                    grid[agentRow][agentCol] = 'empty';
+                    placeRandomly('supply');
+                }
+                else if (grid[agentRow][agentCol] === 'zombie') {
+                    console.log('zombie collected!');
+                    updateScore(-10); // Adiciona 10 pontos ao placar
+                    newAgentCell.classList.remove('zombie');
+                    // Atualiza a posição do agente no mapa
+                    grid[agentRow][agentCol] = 'empty';
+                    placeRandomly('zombie');
+                }
+                else if (grid[agentRow][agentCol] === 'casa') {
+                    console.log('casa collected!');
+                    showModal('Fim de jogo! Sua pontuação foi: ' + score); // Mostra o modal com a pontuação
+                    return;
+                }
+            }
+        }
+
+        // Simula uma pausa de 1 segundo antes de realizar a próxima iteração
+        await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+}
+
+</script>
+</body>
+</html>
